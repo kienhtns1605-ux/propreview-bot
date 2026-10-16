@@ -7,12 +7,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Tập hợp lưu trữ ID bài viết đã đăng để tránh trùng lặp
 const postedArticleIds = new Set();
 
-// ==========================================
-// 1. GIAO DIỆN WEB CALCULATOR BẤT ĐỘNG SẢN
-// ==========================================
+// 1. GIAO DIỆN CALCULATOR BĐS
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -64,9 +61,7 @@ app.get('/', (req, res) => {
   `);
 });
 
-// ==========================================
-// 2. HÀM LẤY TIN BẤT ĐỘNG SẢN MỚI TỪ RSS CAFEF
-// ==========================================
+// 2. HÀM LẤY TIN BĐS MỚI TỪ RSS CAFEF
 async function fetchLatestBdsNews() {
   try {
     const feed = await parser.parseURL('https://cafef.vn/bat-dong-san.rss'); 
@@ -80,3 +75,28 @@ async function fetchLatestBdsNews() {
       id, 
       title: latestItem.title, 
       summary: latestItem.contentSnippet || latestItem.title, 
+      link: latestItem.link 
+    };
+  } catch (error) {
+    console.error('❌ Lỗi lấy tin RSS:', error.message);
+    return null;
+  }
+}
+
+// 3. HÀM ĐĂNG BÀI LÊN FANPAGE QUA GRAPH API
+async function postToFacebookPage(content) {
+  const PAGE_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+
+  if (!PAGE_TOKEN) {
+    console.error('⚠️ LỖI: Chưa cấu hình PAGE_ACCESS_TOKEN trên Render!');
+    return false;
+  }
+
+  try {
+    const url = `https://graph.facebook.com/v18.0/me/feed`;
+    const response = await axios.post(url, {
+      message: content,
+      access_token: PAGE_TOKEN
+    });
+
+    console.log('✅ ĐÃ ĐĂNG BÀI LÊN FANPAGE THÀNH CÔNG! Post ID:',
