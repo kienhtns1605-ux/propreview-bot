@@ -9,7 +9,6 @@ app.use(express.urlencoded({ extended: true }));
 
 const postedArticleIds = new Set();
 
-// 1. GIAO DIỆN CALCULATOR BĐS
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -61,7 +60,6 @@ app.get('/', (req, res) => {
   `);
 });
 
-// 2. HÀM LẤY TIN BĐS MỚI TỪ RSS CAFEF
 async function fetchLatestBdsNews() {
   try {
     const feed = await parser.parseURL('https://cafef.vn/bat-dong-san.rss'); 
@@ -83,7 +81,6 @@ async function fetchLatestBdsNews() {
   }
 }
 
-// 3. HÀM ĐĂNG BÀI LÊN FANPAGE QUA GRAPH API
 async function postToFacebookPage(content) {
   const PAGE_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 
@@ -99,4 +96,49 @@ async function postToFacebookPage(content) {
       access_token: PAGE_TOKEN
     });
 
-    console.log('✅ ĐÃ ĐĂNG BÀI LÊN FANPAGE THÀNH CÔNG! Post ID:',
+    console.log('✅ ĐÃ ĐĂNG BÀI LÊN FANPAGE THÀNH CÔNG! Post ID:', response.data.id);
+    return true;
+  } catch (error) {
+    console.error('❌ LỖI KHI ĐĂNG BÀI LÊN FANPAGE:', error.response ? JSON.stringify(error.response.data) : error.message);
+    return false;
+  }
+}
+
+async function processAutoNews() {
+  const news = await fetchLatestBdsNews();
+  if (news) {
+    const content = `📰 [TIN TỨC BẤT ĐỘNG SẢN MỚI NHẤT]\n\n🔥 ${news.title.toUpperCase()}\n\n📌 ${news.summary.substring(0, 250)}...\n\n👉 Xem chi tiết bài viết: ${news.link}\n\n#BatDongSan #Happywork #PropReviewAI`;
+    const success = await postToFacebookPage(content);
+    if (success) {
+      postedArticleIds.add(news.id);
+      return true;
+    }
+  }
+  return false;
+}
+
+setInterval(async () => {
+  console.log('⏰ Hệ thống đang tự động kiểm tra tin tức BĐS mới...');
+  await processAutoNews();
+}, 60 * 60 * 1000);
+
+app.get('/trigger-news', async (req, res) => {
+  console.log('🚀 Đã nhận lệnh kích hoạt đăng tin thủ công...');
+  const news = await fetchLatestBdsNews();
+  if (news) {
+    const content = `📰 [TIN TỨC BẤT ĐỘNG SẢN MỚI NHẤT]\n\n🔥 ${news.title.toUpperCase()}\n\n📌 ${news.summary.substring(0, 250)}...\n\n👉 Xem chi tiết bài viết: ${news.link}\n\n#BatDongSan #Happywork #PropReviewAI`;
+    const success = await postToFacebookPage(content);
+    if (success) {
+      postedArticleIds.add(news.id);
+      return res.send('✅ ĐÃ ĐĂNG BÀI TỰ ĐỘNG THÀNH CÔNG LÊN FANPAGE HAPPYWORK!');
+    } else {
+      return res.status(500).send('❌ Đăng bài thất bại. Mở trang Logs trên Render để xem chi tiết lỗi.');
+    }
+  }
+  res.send('⏰ Chưa có tin tức mới hoặc bài viết này đã được đăng trước đó.');
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server PropReview AI đang chạy ở cổng ${PORT}`);
+});
